@@ -8,11 +8,11 @@ app.use(bodyParser.json());
 
 const document = {
     id: "doc-1",
-    created: "2025-03-01",
-    review: "2025-03-10",
-    deadline: "2025-03-20",
-    publication: "2025-03-30",
-    expiry: "2035-04-10",
+    created: "2025-03-03",
+    review: "2025-03-04",
+    deadline: "2025-03-05",
+    publication: "2025-03-06",
+    expiry: "2025-03-07",
     versions: [
         {
             id: "ver-1",
@@ -25,7 +25,7 @@ const document = {
         {
             id: "ver-2",
             name: "Version 2",
-            created: "2025-03-15",
+            created: "2025-03-05",
             status: "review",
             author: "kishan",
             changes: "Updated this to that"
@@ -64,42 +64,75 @@ app.post("/change-version", (req, res) => {
 
 
 function calculateDateDiff(date1, date2) {
-    let diffTime = new Date(date1) - new Date(date2);
-    let diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    let diffDays = 0;
+    date1 = new Date(date1);
+    date2 = new Date(date2);
+
+    while (date2 < date1) {
+        if (date2.getDay() != 6 && date2.getDay() != 0) {
+            diffDays++;
+        }
+
+        date2.setDate(date2.getDate() + 1);
+    }
 
     return diffDays;
+}
+
+function calculateDate(date, diff) {
+    date = new Date(date);
+    while (diff > 0) {
+        if (date.getDay() != 6 && date.getDay() != 0) {
+            diff--;
+        }
+
+        date.setDate(date.getDate() + 1);
+    }
+
+    return date;
 }
 
 app.post("/change-date", (req, res) => {
     let { type, newDate } = req.body;
     newDate = new Date(newDate);
-    let date;
 
+    let date;
     switch (type) {
         case "review":
+            if (new Date(document.review).toString() == newDate.toString()) break;
             var diff = calculateDateDiff(document.deadline, document.review);
             document.review = newDate.toLocaleDateString('en-CA');
-            date = new Date(document.review);
-            date.setDate(date.getDate() + diff);
-            newDate = date;
+            newDate = calculateDate(document.review, diff);
 
         case "deadline":
+            if (new Date(document.deadline).toString() == newDate.toString()) break;
+
             var diff = calculateDateDiff(document.publication, document.deadline);
 
             document.deadline = newDate.toLocaleDateString('en-CA');
-            date = new Date(document.deadline);
-            date.setDate(date.getDate() + diff);
-            newDate = date;
+            newDate = calculateDate(document.deadline, diff);
 
         case "publication":
+            if (new Date(document.publication).toString() == newDate.toString()) break;
+
             var diff = calculateDateDiff(document.expiry, document.publication);
             document.publication = newDate.toLocaleDateString('en-CA');
-            date = new Date(document.publication);
-            date.setDate(date.getDate() + diff);
-            newDate = date;
+            newDate = calculateDate(document.publication, diff);
 
         case "expiry":
+            if (new Date(document.expiry).toString() == newDate.toString()) break;
+
             document.expiry = newDate.toLocaleDateString('en-CA');
+            let newVersion = {
+                id: `ver-${(document.versions.length + 1)}`,
+                name: `Version  ${(document.versions.length + 1)}`,
+                created: new Date().toLocaleDateString("en-CA"),
+                status: "Draft",
+                author: "kishan",
+                changes: `Updated ${type} date to ${newDate.toLocaleDateString("en-CA")}`
+            }
+
+            document.versions.push(newVersion);
     }
 
     res.status(200).send("success");
@@ -108,21 +141,16 @@ app.post("/change-date", (req, res) => {
 app.post("/change-duration", (req, res) => {
     let { review, approval, expiry, publication } = req.body;
 
-    let date = new Date(document.created);
-    date.setDate(date.getDate() + Number(review));
+    let date = calculateDate(document.created, Number(review));
     document.review = date.toLocaleDateString('en-CA');
 
-
-    date = new Date(document.review);
-    date.setDate(date.getDate() + Number(approval));
+    date = calculateDate(document.review, Number(approval));
     document.deadline = date.toLocaleDateString('en-CA');
 
-    date = new Date(document.deadline);
-    date.setDate(date.getDate() + Number(publication));
+    date = calculateDate(document.deadline, Number(publication));
     document.publication = date.toLocaleDateString('en-CA');
 
-    date = new Date(document.publication);
-    date.setDate(date.getDate() + Number(expiry));
+    date = calculateDate(document.publication, Number(expiry));
     document.expiry = date.toLocaleDateString('en-CA');
 
     res.status(200).send("success")

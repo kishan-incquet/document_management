@@ -1,14 +1,20 @@
 <template>
     <v-row col="10">
-        <v-col cols="4" class="pt-5 ">
-            <v-card height="99vh">
+        <v-col cols="4" class="overflow-auto" height="100vh">
+            <v-card min-height="100vh" class="pt-2">
                 <div class="d-flex">
                     <h3 class="pl-2">Document Versions</h3>
-                    <v-btn class="ml-auto mr-5" v-on:click="compare">Compare</v-btn>
+                    <v-btn class="ml-auto mr-5 text-capitalize" depressed v-if="!comparison"
+                        v-on:click="comparison = true" v-bind:disabled="!selectedVersion" color="#e5e7eb"
+                        style="color: #444e5d !important;">Compare</v-btn>
+                    <v-btn class="ml-auto mr-5 text-capitalize white--text" color="#2463eb" depressed v-else
+                        v-on:click="comparison = false">Cancel
+                        Compare</v-btn>
+
                 </div>
-                <DocumentCard v-for="version in doc.versions" v-bind:key="version.id" v-bind:id="version.id"
-                    v-bind:name="version.name" v-bind:date="version.created" v-bind:status="version.status"
-                    v-on:showVersion="showVersionDetails" />
+                <DocumentCard v-for="version in doc.versions" v-bind:key="version.id" v-bind:version="version"
+                    v-bind:original="selectedVersion" v-on:showVersion="showVersionDetails" v-on:compare="compare"
+                    v-bind:compare="comparison" v-bind:compareWith="compareWith" />
 
                 <v-card v-if="selectedVersion != null" class="version-details mx-5 my-2 mt-auto">
                     <v-card-title>
@@ -38,8 +44,7 @@
                                 <v-chip v-if="versionDetails.status == 'approved'" small color="#defee9"
                                     text-color="#408649">Approved</v-chip>
                                 <v-chip v-else-if="versionDetails.status == 'review'" small color="#fef9c3"
-                                    text-color="#bb9c65">In
-                                    Review</v-chip>
+                                    text-color="#bb9c65">In Review</v-chip>
                                 <v-chip v-else small color="#dbe9fe" text-color="#758dd3">Draft</v-chip>
                             </div>
                         </div>
@@ -68,8 +73,7 @@
                         <div class="d-flex">
                             <span>State: </span>
                             <div class="text-right ml-auto text-field-container">
-                                <v-select v-bind:items="versionStatuses" v-model="newStatus" v-bind:value="newStatus"
-                                    dense outlined></v-select>
+                                <v-select v-bind:items="versionStatuses" v-model="newStatus" dense outlined></v-select>
                             </div>
                         </div>
                         <div class="d-flex">
@@ -88,7 +92,7 @@
                     </v-card-text>
                 </v-card>
 
-                <v-card class="version-comparison mx-5 my-2 mt-auto">
+                <v-card v-if="comparedHTML != ''" class="version-comparison mx-5 my-2 mt-auto">
                     <v-card-title>
                         <span class="body-1 font-weight-bold">Version comparison</span>
                     </v-card-title>
@@ -111,17 +115,16 @@
                                 <span class="caption"> Modified content</span>
                             </div>
                         </div>
-
-                        {{ comparedText }}
+                        <div v-html="comparedHTML"
+                            style="background-color: #f9fafb !important; border: 1px solid #f9fafb !important;"
+                            class="mt-0 px-2 py-2"></div>
                     </v-card-text>
-
                 </v-card>
             </v-card>
         </v-col>
 
         <v-col cols="8">
             <v-card height="99vh" class="pt-2" flat>
-
                 <h3>
                     Document Timeline
                 </h3>
@@ -149,29 +152,61 @@ export default {
             versionDetails: "",
             selectedVersion: null,
             editingVersion: null,
-            newStatus: null,
-            comparedText: "",
-            oldSelectedId: null,
-            versionStatuses: [{ text: "Draft", value: "draft" }, { text: "In review", value: "review" }, { text: "Approved", value: "approved" }]
+            newStatus: "",
+            comparedHTML: "",
+            comparison: false,
+            compareWith: '',
+            versionStatuses: [{ text: "Draft", value: "Draft" }, { text: "In review", value: "review" }, { text: "Approved", value: "approved" }]
         }
     },
 
     methods: {
         showVersionDetails(id) {
-            this.oldSelectedId = this.selectedVersion;
+            this.comparison = false;
+            this.compareWith = '';
+            this.editingVersion = null;
             this.selectedVersion = id;
             const version = this.doc.versions.filter((version) => version.id == id);
 
             this.versionDetails = version[0];
         },
 
-        compare() {
-            console.log(this.selectedVersion, this.oldSelectedId);
+        compare(id) {
+            this.compareWith = id;
+            const originalVersion = this.doc.versions.filter((version) => version.id == id)[0];
+            const compareVersion = this.doc.versions.filter((version) => version.id == this.selectedVersion)[0];
 
+            this.comparedHTML = `<span class="body-1">Comparing ${originalVersion.name} with ${compareVersion.name}</span><br />`;
+
+            if (originalVersion.created.toString() != compareVersion.created.toString()) {
+                this.comparedHTML += `<span class="yellow--text"> - Changed created date from ${originalVersion.created} to ${compareVersion.created} </span><br/>`;
+            }
+
+            if (originalVersion.status != compareVersion.created) {
+                this.comparedHTML += `<span class="yellow--text"> - Changed status from ${originalVersion.status} to ${compareVersion.status} </span><br/>`;
+            }
+
+            if (originalVersion.author == "" && compareVersion.author != "") {
+                this.comparedHTML += `<span class="red--text">- Removed Author ${compareVersion.author} </span><br/>`;
+            } else if (originalVersion.author != "" && compareVersion.author == "") {
+                this.comparedHTML += `<span class="green--text">- Added Author ${originalVersion.author} </span><br/>`;
+            } else if (originalVersion.author != compareVersion.author) {
+                this.comparedHTML += `<span class="yellow--text">- Change Author from ${originalVersion.author} to ${compareVersion.author} </span><br/>`;
+            }
+            if (originalVersion.changes == "" && compareVersion.changes != "") {
+                this.comparedHTML += `<span class="red--text">- Removed Description ${compareVersion.author} </span><br/>`;
+            } else if (originalVersion.changes != "" && compareVersion.changes == "") {
+                this.comparedHTML += `<span class="green--text">- Added Description ${originalVersion.author} </span><br/>`;
+            } else if (originalVersion.changes != compareVersion.changes) {
+                this.comparedHTML += `<span class="yellow--text">- Changed Description from ${originalVersion.changes} to  ${compareVersion.changes} </span><br />`;
+            }
         },
+
         enableEditing() {
             this.editingVersion = this.versionDetails;
             this.newStatus = this.versionDetails.status;
+            console.log(this.newStatus);
+
         },
 
         async loadDocument() {
